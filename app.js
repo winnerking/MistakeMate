@@ -1153,7 +1153,7 @@ function showReviewQuestionInterface(question, reviewStartTime) {
             <div class="mb-6 bg-gray-50 p-4 rounded-lg">
                 <h4 class="text-base font-medium text-gray-700 mb-2">${question.name}</h4>
                 <img src="${question.questionImage}" alt="${question.name}" class="w-full h-auto rounded-md mb-4">
-                <p class="text-gray-600 whitespace-pre-line">${question.notes || '暂无题目内容'}</p>
+                ${question.notes ? `<p class="text-gray-600 whitespace-pre-line">${question.notes}</p>` : ''}
             </div>
             
             <!-- 隐藏的答案区域 -->
@@ -1205,6 +1205,9 @@ function showReviewQuestionInterface(question, reviewStartTime) {
     // 绑定完成做题按钮事件
     const finishQuestionBtn = dialog.querySelector('#finish-question-btn');
     finishQuestionBtn.addEventListener('click', function() {
+        // 停止计时器
+        clearInterval(timerInterval);
+        
         // 显示答案区域
         const answerSection = dialog.querySelector('#answer-section');
         answerSection.classList.remove('hidden');
