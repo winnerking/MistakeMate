@@ -121,9 +121,14 @@ function bindEvents() {
     
     uploadAnswerForm.addEventListener('submit', handleUploadAnswer);
     
-    // AI分类按钮事件
-    if(document.getElementById('auto-category-btn')) {
-        document.getElementById('auto-category-btn').addEventListener('click', handleAutoCategory);
+    // 监听分类下拉框变化，当选择AI分类时添加视觉反馈
+    const questionCategorySelect = document.getElementById('question-category');
+    if (questionCategorySelect) {
+        questionCategorySelect.addEventListener('change', function() {
+            if (this.value === 'ai') {
+                showSuccess('AI分类将在上传时自动选择最适合的分类');
+            }
+        });
     }
     
     // 查看错题详情相关事件
@@ -318,6 +323,46 @@ function handleUploadQuestion(e) {
         return;
     }
     
+    // 检查是否选择了AI分类
+    if (questionCategory === 'ai') {
+        // 显示加载状态
+        const submitButton = document.getElementById('submit-question');
+        const originalButtonText = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> AI正在分类...';
+        
+        // 执行AI分类
+        performAICategory(questionName, questionNotes)
+            .then(category => {
+                // 恢复按钮状态
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+                
+                // 完成上传
+                completeUploadQuestion(questionName, category, questionNotes, questionImageFile);
+                
+                // 显示AI分类结果
+                showSuccess(`AI已将题目分类为：${category}`);
+            })
+            .catch(error => {
+                // 恢复按钮状态
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+                
+                // 显示错误信息
+                showError(`AI分类失败：${error.message || '未知错误'}`);
+                
+                // 默认使用未分类
+                completeUploadQuestion(questionName, '未分类', questionNotes, questionImageFile);
+            });
+    } else {
+        // 如果不是AI分类，直接完成上传
+        completeUploadQuestion(questionName, questionCategory, questionNotes, questionImageFile);
+    }
+}
+
+// 完成上传错题的函数
+function completeUploadQuestion(questionName, questionCategory, questionNotes, questionImageFile) {
     // 生成唯一ID
     const id = Date.now().toString();
     
@@ -365,6 +410,94 @@ function handleUploadQuestion(e) {
         updateCharts();
     };
     reader.readAsDataURL(questionImageFile);
+}
+
+// 执行AI分类的函数
+function performAICategory(questionName, questionNotes) {
+    return new Promise((resolve, reject) => {
+        // 验证输入
+        if (!questionName && !questionNotes) {
+            reject(new Error('请至少输入错题名称或错题笔记，以便AI进行分类'));
+            return;
+        }
+        
+        // 构建请求数据
+        const prompt = `根据以下信息确定这道题的学科分类，选项是：${categories.join('、')}。请只返回类别名称，不要包含其他解释。\n\n${questionName}\n${questionNotes}`;
+        
+        // 调用DeepSeek AI API (兼容OpenAI格式)
+        fetch('https://api.deepseek.com/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer sk-8d0cb29639714c1ab2e89ba00152eb2a'
+            },
+            body: JSON.stringify({
+                model: 'deepseek-chat',
+                messages: [
+                    { role: 'system', content: '你是一个智能分类助手，可以根据题目内容判断学科类别。' },
+                    { role: 'user', content: prompt }
+                ],
+                max_tokens: 10
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`API调用失败: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // 处理AI返回的分类结果
+            if (data.choices && data.choices.length > 0) {
+                const categoryText = data.choices[0].message.content.trim();
+                
+                // 检查返回的分类是否在已有分类列表中
+                if (categories.includes(categoryText)) {
+                    resolve(categoryText);
+                } else {
+                    // 如果返回的内容不完全匹配，尝试模糊匹配
+                    const matchedCategory = findBestMatchingCategory(categoryText);
+                    if (matchedCategory) {
+                        resolve(matchedCategory);
+                    } else {
+                        // 如果没有匹配的分类，使用默认分类
+                        resolve('未分类');
+                    }
+                }
+            } else {
+                reject(new Error('未能获取AI分类结果'));
+            }
+        })
+        .catch(error => {
+            reject(error);
+        });
+    });
+}
+
+// 查找最佳匹配的分类
+function findBestMatchingCategory(text) {
+    const lowerText = text.toLowerCase();
+    
+    // 遍历所有分类，查找最匹配的
+    for (const category of categories) {
+        const lowerCategory = category.toLowerCase();
+        
+        // 如果分类名称包含在文本中，或者文本包含在分类名称中
+        if (lowerText.includes(lowerCategory) || lowerCategory.includes(lowerText)) {
+            return category;
+        }
+        
+        // 检查关键词匹配
+        const keywords = lowerCategory.split(' ');
+        for (const keyword of keywords) {
+            if (lowerText.includes(keyword) && keyword.length > 1) {
+                return category;
+            }
+        }
+    }
+    
+    // 如果没有找到匹配的分类，返回null
+    return null;
 }
 
 // 重置答案表单
