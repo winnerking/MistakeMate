@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>错题本网站</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    
+    <!-- 配置Tailwind自定义颜色和字体 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5', // 主色调：靛蓝色
+                        secondary: '#10B981', // 辅助色：绿色
+                        accent: '#F59E0B', // 强调色：琥珀色
+                        dark: '#1F2937', // 深色
+                        light: '#F9FAFB', // 浅色
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .transition-custom {
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans min-h-screen">
+    <!-- 导航栏 -->
+    <nav id="navbar" class="fixed w-full bg-white/95 backdrop-blur-sm shadow-sm z-50 transition-custom">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <i class="fa fa-book text-primary text-2xl mr-2"></i>
+                    <span class="text-xl font-bold bg-gradient-to-r from-primary to-secondary text-transparent bg-clip-text">错题本</span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="flex items-center space-x-6">
+                        <a href="#dashboard" class="text-gray-700 hover:text-primary transition-custom">仪表盘</a>
+                        <a href="#questions" class="text-gray-700 hover:text-primary transition-custom">错题集</a>
+                        <a href="#categories" class="text-gray-700 hover:text-primary transition-custom">分类</a>
+                        <a href="#progress" class="text-gray-700 hover:text-primary transition-custom">学习进度</a>
+                    </div>
+                </div>
+                <div class="md:hidden">
+                    <button id="mobile-menu-button" class="text-gray-700 hover:text-primary focus:outline-none">
+                        <i class="fa fa-bars text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- 移动端菜单 -->
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-200">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <a href="#dashboard" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50 transition-custom">仪表盘</a>
+                <a href="#questions" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50 transition-custom">错题集</a>
+                <a href="#categories" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50 transition-custom">分类</a>
+                <a href="#progress" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50 transition-custom">学习进度</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
+        <!-- 仪表盘部分 -->
+        <section id="dashboard" class="mb-16">
+            <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold text-gray-800 mb-6">欢迎使用错题本</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- 统计卡片：总错题数 -->
+                <div class="bg-white rounded-xl shadow-md p-6 transform hover:-translate-y-1 transition-custom">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">总错题数</p>
+                            <h3 class="text-3xl font-bold text-gray-800 mt-1" id="total-questions">0</h3>
+                        </div>
+                        <div class="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                            <i class="fa fa-question-circle text-primary text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-sm text-gray-500">
+                        <span class="text-secondary font-medium"><i class="fa fa-arrow-up"></i> 0%</span> 较上周
+                    </div>
+                </div>
+                
+                <!-- 统计卡片：已掌握 -->
+                <div class="bg-white rounded-xl shadow-md p-6 transform hover:-translate-y-1 transition-custom">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">已掌握</p>
+                            <h3 class="text-3xl font-bold text-gray-800 mt-1" id="mastered-questions">0</h3>
+                        </div>
+                        <div class="h-12 w-12 rounded-full bg-secondary/10 flex items-center justify-center">
+                            <i class="fa fa-check-circle text-secondary text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-sm text-gray-500">
+                        <span class="text-secondary font-medium"><i class="fa fa-arrow-up"></i> 0%</span> 较上周
+                    </div>
+                </div>
+                
+                <!-- 统计卡片：待复习 -->
+                <div class="bg-white rounded-xl shadow-md p-6 transform hover:-translate-y-1 transition-custom">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">待复习</p>
+                            <h3 class="text-3xl font-bold text-gray-800 mt-1" id="review-questions">0</h3>
+                        </div>
+                        <div class="h-12 w-12 rounded-full bg-accent/10 flex items-center justify-center">
+                            <i class="fa fa-clock-o text-accent text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-sm text-gray-500">
+                        <span class="text-secondary font-medium"><i class="fa fa-arrow-up"></i> 0%</span> 较上周
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 学习进度图表 -->
+            <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800">学习进度</h3>
+                    <div class="mt-2 md:mt-0">
+                        <select id="progress-chart-range" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                            <option value="week">最近一周</option>
+                            <option value="month">最近一月</option>
+                            <option value="quarter">最近三月</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="h-64">
+                    <canvas id="progress-chart"></canvas>
+                </div>
+            </div>
+            
+            <!-- 快速操作区 -->
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">快速操作</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <button id="upload-question-btn" class="flex flex-col items-center justify-center bg-primary/10 hover:bg-primary/20 text-primary rounded-lg p-4 transition-custom">
+                        <i class="fa fa-upload text-2xl mb-2"></i>
+                        <span class="text-sm font-medium">上传错题</span>
+                    </button>
+                    <button class="flex flex-col items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg p-4 transition-custom">
+                        <i class="fa fa-random text-2xl mb-2"></i>
+                        <span class="text-sm font-medium">随机练习</span>
+                    </button>
+                    <button class="flex flex-col items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg p-4 transition-custom">
+                        <i class="fa fa-tags text-2xl mb-2"></i>
+                        <span class="text-sm font-medium">管理分类</span>
+                    </button>
+                    <button class="flex flex-col items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg p-4 transition-custom">
+                        <i class="fa fa-trophy text-2xl mb-2"></i>
+                        <span class="text-sm font-medium">我的成就</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 错题集部分 -->
+        <section id="questions" class="mb-16">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold text-gray-800">错题集</h2>
+                <div class="mt-4 md:mt-0 flex flex-wrap gap-3">
+                    <div class="relative">
+                        <input type="text" id="search-questions" placeholder="搜索错题..." class="pl-9 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary w-full sm:w-64">
+                        <i class="fa fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                    <select id="filter-category" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                        <option value="all">全部分类</option>
+                        <option value="math">数学</option>
+                        <option value="english">英语</option>
+                        <option value="physics">物理</option>
+                        <option value="chemistry">化学</option>
+                    </select>
+                    <select id="sort-questions" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                        <option value="newest">最新上传</option>
+                        <option value="oldest">最早上传</option>
+                        <option value="name-asc">名称升序</option>
+                        <option value="name-desc">名称降序</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- 错题列表 -->
+            <div id="questions-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- 这里将动态加载错题 -->
+                <div class="col-span-full text-center py-12 text-gray-500">
+                    <i class="fa fa-book-open text-4xl mb-4"></i>
+                    <p>暂无错题，请点击"上传错题"按钮开始添加</p>
+                </div>
+            </div>
+            
+            <!-- 分页控制 -->
+            <div id="pagination" class="mt-8 flex justify-center">
+                <!-- 分页将动态生成 -->
+            </div>
+        </section>
+
+        <!-- 分类部分 -->
+        <section id="categories" class="mb-16">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold text-gray-800">分类管理</h2>
+                <button id="add-category-btn" class="mt-4 md:mt-0 inline-flex items-center justify-center bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 transition-custom">
+                    <i class="fa fa-plus mr-2"></i>
+                    添加分类
+                </button>
+            </div>
+            
+            <!-- 分类列表 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- 数学分类 -->
+                <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-primary transform hover:-translate-y-1 transition-custom">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">数学</h3>
+                        <div class="flex space-x-2">
+                            <button class="text-gray-400 hover:text-gray-600 transition-custom">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button class="text-gray-400 hover:text-red-500 transition-custom">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-gray-500 text-sm mb-4">包含 <span class="font-medium text-gray-700">0</span> 道错题</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-primary h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <!-- 英语分类 -->
+                <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500 transform hover:-translate-y-1 transition-custom">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">英语</h3>
+                        <div class="flex space-x-2">
+                            <button class="text-gray-400 hover:text-gray-600 transition-custom">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button class="text-gray-400 hover:text-red-500 transition-custom">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-gray-500 text-sm mb-4">包含 <span class="font-medium text-gray-700">0</span> 道错题</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-blue-500 h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <!-- 物理分类 -->
+                <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500 transform hover:-translate-y-1 transition-custom">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">物理</h3>
+                        <div class="flex space-x-2">
+                            <button class="text-gray-400 hover:text-gray-600 transition-custom">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button class="text-gray-400 hover:text-red-500 transition-custom">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-gray-500 text-sm mb-4">包含 <span class="font-medium text-gray-700">0</span> 道错题</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <!-- 化学分类 -->
+                <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-purple-500 transform hover:-translate-y-1 transition-custom">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">化学</h3>
+                        <div class="flex space-x-2">
+                            <button class="text-gray-400 hover:text-gray-600 transition-custom">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button class="text-gray-400 hover:text-red-500 transition-custom">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-gray-500 text-sm mb-4">包含 <span class="font-medium text-gray-700">0</span> 道错题</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-purple-500 h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 学习进度部分 -->
+        <section id="progress">
+            <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold text-gray-800 mb-6">学习进度</h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- 错题掌握情况 -->
+                <div class="bg-white rounded-xl shadow-md p-6 lg:col-span-2">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">错题掌握情况</h3>
+                    <div class="h-64">
+                        <canvas id="mastery-chart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- 分类占比 -->
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">分类占比</h3>
+                    <div class="h-64">
+                        <canvas id="category-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 成就徽章 -->
+            <div class="bg-white rounded-xl shadow-md p-6 mt-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">成就徽章</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <!-- 成就1 -->
+                    <div class="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
+                        <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-2">
+                            <i class="fa fa-book text-gray-500 text-2xl"></i>
+                        </div>
+                        <p class="text-sm font-medium text-gray-500">开始学习</p>
+                    </div>
+                    
+                    <!-- 成就2 -->
+                    <div class="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
+                        <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-2">
+                            <i class="fa fa-graduation-cap text-gray-500 text-2xl"></i>
+                        </div>
+                        <p class="text-sm font-medium text-gray-500">初露锋芒</p>
+                    </div>
+                    
+                    <!-- 成就3 -->
+                    <div class="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
+                        <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-2">
+                            <i class="fa fa-trophy text-gray-500 text-2xl"></i>
+                        </div>
+                        <p class="text-sm font-medium text-gray-500">学习达人</p>
+                    </div>
+                    
+                    <!-- 成就4 -->
+                    <div class="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
+                        <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-2">
+                            <i class="fa fa-medal text-gray-500 text-2xl"></i>
+                        </div>
+                        <p class="text-sm font-medium text-gray-500">知识大师</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-12">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <div class="flex items-center mb-4">
+                        <i class="fa fa-book text-secondary text-2xl mr-2"></i>
+                        <span class="text-xl font-bold">错题本</span>
+                    </div>
+                    <p class="text-gray-400 mb-4">帮助学生整理错题，提高学习效率，掌握知识点。</p>
+                    <div class="flex space-x-4">
+                        <a href="#" class="text-gray-400 hover:text-white transition-custom">
+                            <i class="fa fa-github text-xl"></i>
+                        </a>
+                        <a href="#" class="text-gray-400 hover:text-white transition-custom">
+                            <i class="fa fa-twitter text-xl"></i>
+                        </a>
+                        <a href="#" class="text-gray-400 hover:text-white transition-custom">
+                            <i class="fa fa-wechat text-xl"></i>
+                        </a>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">快速链接</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#dashboard" class="text-gray-400 hover:text-white transition-custom">仪表盘</a></li>
+                        <li><a href="#questions" class="text-gray-400 hover:text-white transition-custom">错题集</a></li>
+                        <li><a href="#categories" class="text-gray-400 hover:text-white transition-custom">分类</a></li>
+                        <li><a href="#progress" class="text-gray-400 hover:text-white transition-custom">学习进度</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">联系我们</h3>
+                    <ul class="space-y-2 text-gray-400">
+                        <li class="flex items-center"><i class="fa fa-envelope-o mr-2"></i> contact@example.com</li>
+                        <li class="flex items-center"><i class="fa fa-phone mr-2"></i> +86 123 4567 8910</li>
+                        <li class="flex items-center"><i class="fa fa-map-marker mr-2"></i> 北京市海淀区</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-500 text-sm">
+                <p>&copy; 2023 错题本网站. 保留所有权利.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 上传错题模态框 -->
+    <div id="upload-question-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-bold text-gray-800">上传错题</h3>
+                    <button id="close-question-modal" class="text-gray-400 hover:text-gray-600 focus:outline-none">
+                        <i class="fa fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <form id="upload-question-form">
+                    <div class="mb-6">
+                        <label for="question-image" class="block text-sm font-medium text-gray-700 mb-2">错题图片</label>
+                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                            <div class="space-y-1 text-center">
+                                <i class="fa fa-cloud-upload text-3xl text-gray-400 mb-2"></i>
+                                <div class="flex text-sm text-gray-600">
+                                    <label for="question-image" class="relative cursor-pointer bg-white rounded-md font-medium text-primary hover:text-primary/90 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
+                                        <span>上传图片</span>
+                                        <input id="question-image" name="question-image" type="file" accept="image/*" class="sr-only">
+                                    </label>
+                                    <p class="pl-1">或拖放文件</p>
+                                </div>
+                                <p class="text-xs text-gray-500">PNG, JPG, GIF 最大 10MB</p>
+                            </div>
+                        </div>
+                        <div id="question-preview" class="mt-4 hidden">
+                            <img id="question-image-preview" src="" alt="错题预览" class="max-w-full h-auto rounded-md border border-gray-200">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label for="question-name" class="block text-sm font-medium text-gray-700 mb-2">错题名称</label>
+                        <input type="text" id="question-name" name="question-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary/50 focus:ring-opacity-50" placeholder="请输入错题名称">
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label for="question-category" class="block text-sm font-medium text-gray-700 mb-2">错题分类</label>
+                        <select id="question-category" name="question-category" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary/50 focus:ring-opacity-50">
+                            <option value="math">数学</option>
+                            <option value="english">英语</option>
+                            <option value="physics">物理</option>
+                            <option value="chemistry">化学</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label for="question-notes" class="block text-sm font-medium text-gray-700 mb-2">错题笔记</label>
+                        <textarea id="question-notes" name="question-notes" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary/50 focus:ring-opacity-50" placeholder="请输入错题相关笔记"></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancel-upload-question" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                            取消
+                        </button>
+                        <button type="submit" id="submit-question" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                            上传错题
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上传答案模态框 -->
+    <div id="upload-answer-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-bold text-gray-800">上传答案</h3>
+                    <button id="close-answer-modal" class="text-gray-400 hover:text-gray-600 focus:outline-none">
+                        <i class="fa fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <form id="upload-answer-form">
+                    <div class="mb-6">
+                        <label for="answer-image" class="block text-sm font-medium text-gray-700 mb-2">答案图片</label>
+                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                            <div class="space-y-1 text-center">
+                                <i class="fa fa-cloud-upload text-3xl text-gray-400 mb-2"></i>
+                                <div class="flex text-sm text-gray-600">
+                                    <label for="answer-image" class="relative cursor-pointer bg-white rounded-md font-medium text-primary hover:text-primary/90 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
+                                        <span>上传图片</span>
+                                        <input id="answer-image" name="answer-image" type="file" accept="image/*" class="sr-only">
+                                    </label>
+                                    <p class="pl-1">或拖放文件</p>
+                                </div>
+                                <p class="text-xs text-gray-500">PNG, JPG, GIF 最大 10MB</p>
+                            </div>
+                        </div>
+                        <div id="answer-preview" class="mt-4 hidden">
+                            <img id="answer-image-preview" src="" alt="答案预览" class="max-w-full h-auto rounded-md border border-gray-200">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label for="answer-notes" class="block text-sm font-medium text-gray-700 mb-2">答案解析</label>
+                        <textarea id="answer-notes" name="answer-notes" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary/50 focus:ring-opacity-50" placeholder="请输入答案解析"></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancel-upload-answer" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                            取消
+                        </button>
+                        <button type="submit" id="submit-answer" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                            上传答案
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看错题详情模态框 -->
+    <div id="question-detail-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-bold text-gray-800" id="detail-modal-title">错题详情</h3>
+                    <button id="close-detail-modal" class="text-gray-400 hover:text-gray-600 focus:outline-none">
+                        <i class="fa fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div id="detail-content">
+                    <!-- 内容将动态生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 成功提示 -->
+    <div id="success-toast" class="fixed bottom-4 right-4 bg-secondary text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center z-50">
+        <i class="fa fa-check-circle mr-2"></i>
+        <span id="success-message">操作成功</span>
+    </div>
+
+    <!-- 错误提示 -->
+    <div id="error-toast" class="fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center z-50">
+        <i class="fa fa-exclamation-circle mr-2"></i>
+        <span id="error-message">操作失败</span>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="mock-data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
