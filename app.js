@@ -997,29 +997,102 @@ function viewQuestionDetail(questionId) {
             `}
             
             <div class="flex justify-between items-center pt-4 border-t border-gray-200">
-                <button class="edit-question-btn px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-custom">
-                    <i class="fa fa-pencil mr-1"></i> 编辑
+                <button id="review-btn-${questionId}" class="review-question-btn px-4 py-2 border border-blue-300 rounded-md text-sm font-medium text-blue-600 hover:bg-blue-50 transition-custom" data-question-id="${questionId}">
+                    <i class="fa fa-book mr-1"></i> 复习
                 </button>
-                <button class="delete-question-btn px-4 py-2 border border-red-300 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-custom">
+                <button id="delete-btn-${questionId}" class="delete-question-btn px-4 py-2 border border-red-300 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-custom" data-question-id="${questionId}">
                     <i class="fa fa-trash mr-1"></i> 删除
                 </button>
             </div>
         </div>
     `;
     
-    // 绑定编辑按钮事件
-    document.querySelector('.edit-question-btn').addEventListener('click', () => {
-        // TODO: 实现编辑功能
-        showSuccess('编辑功能即将上线');
-    });
+    // 绑定复习按钮事件 - 使用更可靠的选择器
+    const reviewBtn = document.getElementById(`review-btn-${questionId}`);
+    if (reviewBtn) {
+        // 先移除可能存在的事件监听器，避免重复绑定
+        const newReviewBtn = reviewBtn.cloneNode(true);
+        reviewBtn.parentNode.replaceChild(newReviewBtn, reviewBtn);
+        
+        // 绑定新的点击事件
+        newReviewBtn.addEventListener('click', function() {
+            try {
+                // 防止重复点击
+                if (newReviewBtn.classList.contains('disabled')) {
+                    return;
+                }
+                
+                // 禁用按钮，防止重复点击
+                newReviewBtn.classList.add('disabled', 'opacity-50', 'cursor-not-allowed');
+                newReviewBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> 复习中...';
+                
+                // 调用统一的复习函数
+                reviewQuestion(questionId);
+                
+                // 复习后重新获取最新的question对象，确保使用更新后的数据
+                setTimeout(() => {
+                    const updatedQuestion = questions.find(q => q.id === questionId);
+                    if (updatedQuestion) {
+                        // 更新模态框内的复习次数和时间显示
+                        const reviewCountElement = detailContent.querySelector('.fa-eye').parentElement;
+                        if (reviewCountElement) {
+                            reviewCountElement.textContent = `复习 ${updatedQuestion.reviewCount} 次`;
+                        }
+                        
+                        // 更新最近复习时间显示
+                        const reviewedAtElement = detailContent.querySelector('.fa-history').parentElement;
+                        if (reviewedAtElement) {
+                            reviewedAtElement.textContent = `最近复习：${formatDate(updatedQuestion.reviewedAt)}`;
+                        } else if (updatedQuestion.reviewedAt) {
+                            // 如果没有最近复习时间元素，则创建一个
+                            const dateContainer = detailContent.querySelector('.flex.flex-wrap');
+                            if (dateContainer) {
+                                const newReviewElement = document.createElement('span');
+                                newReviewElement.innerHTML = `<i class="fa fa-history mr-1"></i> 最近复习：${formatDate(updatedQuestion.reviewedAt)}`;
+                                dateContainer.appendChild(newReviewElement);
+                            }
+                        }
+                    }
+                    
+                    // 恢复按钮状态
+                    newReviewBtn.classList.remove('disabled', 'opacity-50', 'cursor-not-allowed');
+                    newReviewBtn.innerHTML = '<i class="fa fa-book mr-1"></i> 复习';
+                }, 500); // 短暂延迟后获取更新数据
+                
+            } catch (error) {
+                console.error('复习功能出错:', error);
+                showError('复习操作失败，请重试');
+                // 出错时也要恢复按钮状态
+                newReviewBtn.classList.remove('disabled', 'opacity-50', 'cursor-not-allowed');
+                newReviewBtn.innerHTML = '<i class="fa fa-book mr-1"></i> 复习';
+            }
+        });
+    } else {
+        console.error('未找到复习按钮:', `review-btn-${questionId}`);
+    }
     
-    // 绑定删除按钮事件
-    document.querySelector('.delete-question-btn').addEventListener('click', () => {
-        if (confirm('确定要删除这道错题吗？')) {
-            deleteQuestion(questionId);
-            questionDetailModal.classList.add('hidden');
-        }
-    });
+    // 绑定删除按钮事件 - 使用更可靠的选择器
+    const deleteBtn = document.getElementById(`delete-btn-${questionId}`);
+    if (deleteBtn) {
+        // 先移除可能存在的事件监听器，避免重复绑定
+        const newDeleteBtn = deleteBtn.cloneNode(true);
+        deleteBtn.parentNode.replaceChild(newDeleteBtn, deleteBtn);
+        
+        // 绑定新的点击事件
+        newDeleteBtn.addEventListener('click', function() {
+            try {
+                if (confirm('确定要删除这道错题吗？')) {
+                    deleteQuestion(questionId);
+                    questionDetailModal.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('删除功能出错:', error);
+                showError('删除操作失败，请重试');
+            }
+        });
+    } else {
+        console.error('未找到删除按钮:', `delete-btn-${questionId}`);
+    }
     
     // 显示详情模态框
     questionDetailModal.classList.remove('hidden');
@@ -1037,39 +1110,47 @@ function deleteQuestion(questionId) {
 
 // 复习错题
 function reviewQuestion(questionId) {
-    const question = questions.find(q => q.id === questionId);
-    if (!question) {
-        showError('找不到错题');
-        return;
+    try {
+        const question = questions.find(q => q.id === questionId);
+        if (!question) {
+            showError('找不到错题');
+            return;
+        }
+        
+        // 更新复习次数和最近复习时间
+        question.reviewCount += 1;
+        question.reviewedAt = new Date().toISOString();
+        
+        // 增加复习积分
+        let pointsGained = 10; // 基础复习积分
+        addPoints(pointsGained, '复习错题');
+        
+        // 根据复习次数更新掌握程度
+        if (question.reviewCount === 1) {
+            question.masteryLevel = 30;
+            question.status = 'reviewed';
+        } else if (question.reviewCount >= 3) {
+            question.masteryLevel = 100;
+            question.status = 'mastered';
+            // 掌握知识点额外奖励
+            pointsGained += 20;
+            addPoints(20, '掌握知识点');
+        } else {
+            question.masteryLevel = 60;
+            question.status = 'reviewed';
+        }
+        
+        saveData();
+        savePoints(); // 确保积分数据也被保存
+        showSuccess(`复习完成！获得${pointsGained}积分！`);
+        renderQuestions();
+        updateStats();
+        updateCharts();
+        updatePointsDisplay();
+    } catch (error) {
+        console.error('复习功能出错:', error);
+        showError('复习操作失败，请重试');
     }
-    
-    // 更新复习次数和最近复习时间
-    question.reviewCount += 1;
-    question.reviewedAt = new Date().toISOString();
-    
-    // 增加基础复习积分 (每复习一次获得10积分)
-    addPoints(10, '复习错题');
-    
-    // 根据复习次数更新掌握程度
-    if (question.reviewCount === 1) {
-        question.masteryLevel = 30;
-        question.status = 'reviewed';
-    } else if (question.reviewCount >= 3) {
-        question.masteryLevel = 100;
-        question.status = 'mastered';
-        // 给予额外奖励
-        addPoints(20, '掌握知识点');
-    } else {
-        question.masteryLevel = 60;
-        question.status = 'reviewed';
-    }
-    
-    saveData();
-    showSuccess('复习完成！获得10积分！');
-    renderQuestions();
-    updateStats();
-    updateCharts();
-    updatePointsDisplay();
 }
 
 
