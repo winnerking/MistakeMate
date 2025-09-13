@@ -421,8 +421,11 @@ function performAICategory(questionName, questionNotes) {
             return;
         }
         
+        // 固定使用中文分类列表，确保AI返回中文分类结果
+        const chineseCategories = ['数学', '英语', '物理', '化学', '生物', '历史', '地理', '政治', '语文', '未分类'];
+        
         // 构建请求数据
-        const prompt = `根据以下信息确定这道题的学科分类，选项是：${categories.join('、')}。请只返回类别名称，不要包含其他解释。\n\n${questionName}\n${questionNotes}`;
+        const prompt = `根据以下信息确定这道题的学科分类，选项是：${chineseCategories.join('、')}。请只返回类别名称，不要包含其他解释。\n\n${questionName}\n${questionNotes}`;
         
         // 调用DeepSeek AI API (兼容OpenAI格式)
         fetch('https://api.deepseek.com/chat/completions', {
@@ -1117,39 +1120,172 @@ function reviewQuestion(questionId) {
             return;
         }
         
+        // 记录复习开始时间（用于计算复习时长）
+        const reviewStartTime = new Date();
+        
+        // 显示复习判定对话框
+        showReviewJudgementDialog(question, reviewStartTime);
+        
+    } catch (error) {
+        console.error('复习功能出错:', error);
+        showError('复习操作失败，请重试');
+    }
+}
+
+// 显示复习判定对话框
+function showReviewJudgementDialog(question, reviewStartTime) {
+    // 创建复习判定对话框
+    const dialog = document.createElement('div');
+    dialog.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    
+    // 计算复习时长（秒）
+    const reviewDuration = Math.round((new Date() - reviewStartTime) / 1000);
+    
+    dialog.innerHTML = `
+        <div class="bg-white rounded-xl shadow-lg p-6 max-w-md w-full">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">复习判定</h3>
+            <p class="text-gray-600 mb-2">你已经复习了 <span class="font-medium">${question.name}</span></p>
+            <p class="text-gray-500 text-sm mb-6">复习时长: ${formatDuration(reviewDuration)}</p>
+            
+            <div class="mb-6">
+                <h4 class="text-base font-medium text-gray-700 mb-2">你是否正确解答了这道题？</h4>
+                <div class="flex space-x-4">
+                    <button id="review-correct" class="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-custom">
+                        <i class="fa fa-check mr-1"></i> 正确
+                    </button>
+                    <button id="review-incorrect" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-custom">
+                        <i class="fa fa-times mr-1"></i> 错误
+                    </button>
+                </div>
+            </div>
+            
+            ${question.answerImage ? `
+            <div class="mb-4 bg-gray-50 p-3 rounded-lg">
+                <p class="text-sm text-gray-500 mb-2">答案提示：</p>
+                <img src="${question.answerImage}" alt="答案" class="w-full h-auto rounded-md max-h-40 object-contain">
+            </div>
+            ` : ''}
+        </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    // 绑定正确按钮事件
+    const correctBtn = dialog.querySelector('#review-correct');
+    correctBtn.addEventListener('click', function() {
+        completeReview(question, true, reviewDuration);
+        dialog.remove();
+    });
+    
+    // 绑定错误按钮事件
+    const incorrectBtn = dialog.querySelector('#review-incorrect');
+    incorrectBtn.addEventListener('click', function() {
+        completeReview(question, false, reviewDuration);
+        dialog.remove();
+    });
+    
+    // 点击背景关闭对话框
+    dialog.addEventListener('click', function(e) {
+        if (e.target === dialog) {
+            dialog.remove();
+        }
+    });
+}
+
+// 完成复习
+function completeReview(question, isCorrect, reviewDuration) {
+    try {
         // 更新复习次数和最近复习时间
         question.reviewCount += 1;
         question.reviewedAt = new Date().toISOString();
         
         // 增加复习积分
         let pointsGained = 10; // 基础复习积分
-        addPoints(pointsGained, '复习错题');
         
-        // 根据复习次数更新掌握程度
-        if (question.reviewCount === 1) {
-            question.masteryLevel = 30;
-            question.status = 'reviewed';
-        } else if (question.reviewCount >= 3) {
-            question.masteryLevel = 100;
-            question.status = 'mastered';
-            // 掌握知识点额外奖励
-            pointsGained += 20;
-            addPoints(20, '掌握知识点');
+        if (isCorrect) {
+            // 复习正确的情况
+            showSuccess('很棒！你正确解答了这道题！');
+            
+            // 根据复习机制.md要求：如果改错正确，数据库更新错题的提醒时间为七天后
+            
+            // 根据复习次数更新掌握程度
+            if (question.reviewCount === 1) {
+                question.masteryLevel = 30;
+                question.status = 'reviewed';
+            } else if (question.reviewCount >= 3) {
+                question.masteryLevel = 100;
+                question.status = 'mastered';
+                // 掌握知识点额外奖励
+                pointsGained += 20;
+                addPoints(20, '掌握知识点');
+            } else {
+                question.masteryLevel = 60;
+                question.status = 'reviewed';
+            }
+            
+            // 复习正确额外奖励
+            pointsGained += 5;
         } else {
-            question.masteryLevel = 60;
+            // 复习错误的情况
+            showError('不要灰心，继续努力！');
+            
+            // 根据复习机制.md要求：如果改错错误，数据库更新错题的提醒时间为三天后
+            
+            // 保持或降低掌握程度
+            question.masteryLevel = Math.max(0, (question.masteryLevel || 0) - 10);
             question.status = 'reviewed';
         }
         
+        // 添加积分
+        addPoints(pointsGained, isCorrect ? '复习正确' : '复习错误');
+        
+        // 记录复习时长
+        if (!question.reviewHistory) {
+            question.reviewHistory = [];
+        }
+        
+        question.reviewHistory.push({
+            timestamp: new Date().toISOString(),
+            isCorrect: isCorrect,
+            duration: reviewDuration,
+            pointsGained: pointsGained
+        });
+        
+        // 保存数据
         saveData();
         savePoints(); // 确保积分数据也被保存
+        
+        // 显示总积分提示
         showSuccess(`复习完成！获得${pointsGained}积分！`);
+        
+        // 更新UI
         renderQuestions();
         updateStats();
         updateCharts();
         updatePointsDisplay();
+        
+        // 重新设置提醒定时器，确保使用最新的复习信息
+        if (window.ReviewReminder) {
+            ReviewReminder.setupReminderTimer();
+        }
     } catch (error) {
-        console.error('复习功能出错:', error);
+        console.error('完成复习失败:', error);
         showError('复习操作失败，请重试');
+    }
+}
+
+// 格式化时长
+function formatDuration(seconds) {
+    if (seconds < 60) {
+        return `${seconds}秒`;
+    } else if (seconds < 3600) {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return `${minutes}分${remainingSeconds > 0 ? remainingSeconds + '秒' : ''}`;
+    } else {
+        const hours = Math.floor(seconds / 3600);
+        const remainingMinutes = Math.floor((seconds % 3600) / 60);
+        return `${hours}时${remainingMinutes > 0 ? remainingMinutes + '分' : ''}`;
     }
 }
 
@@ -1735,12 +1871,296 @@ function init() {
     
     // 绑定事件
     bindEvents();
+    bindReviewSettingsEvents();
     
     // 渲染页面
     renderQuestions();
     updateStats();
     renderCategories(); // 渲染分类列表
     updateCategoryFilter(); // 更新分类筛选器
+    
+    // 初始化复习提醒系统
+    if (window.ReviewReminder) {
+        ReviewReminder.init();
+    }
+}
+
+// 绑定复习设置相关事件
+function bindReviewSettingsEvents() {
+    // 获取元素
+    const reviewSettingsBtn = document.getElementById('review-settings-btn');
+    const mobileReviewSettingsBtn = document.getElementById('mobile-review-settings-btn');
+    const reviewSettingsModal = document.getElementById('review-settings-modal');
+    const closeReviewSettingsModal = document.getElementById('close-review-settings-modal');
+    const cancelReviewSettings = document.getElementById('cancel-review-settings');
+    const reviewSettingsForm = document.getElementById('review-settings-form');
+    const reminderFrequency = document.getElementById('reminder-frequency');
+    const customDaysContainer = document.getElementById('custom-days-container');
+    const reminderIntervalStrategy = document.getElementById('reminder-interval-strategy');
+    const customIntervalsContainer = document.getElementById('custom-intervals-container');
+    const requestNotificationPermission = document.getElementById('request-notification-permission');
+    const permissionStatusText = document.getElementById('permission-status-text');
+
+    // 检查通知权限状态
+    checkNotificationPermission();
+
+    // 绑定复习设置按钮事件
+    if (reviewSettingsBtn) {
+        reviewSettingsBtn.addEventListener('click', showReviewSettingsModal);
+    }
+
+    // 绑定移动端复习设置按钮事件
+    if (mobileReviewSettingsBtn) {
+        mobileReviewSettingsBtn.addEventListener('click', showReviewSettingsModal);
+    }
+
+    // 绑定关闭按钮事件
+    if (closeReviewSettingsModal) {
+        closeReviewSettingsModal.addEventListener('click', hideReviewSettingsModal);
+    }
+
+    // 绑定取消按钮事件
+    if (cancelReviewSettings) {
+        cancelReviewSettings.addEventListener('click', hideReviewSettingsModal);
+    }
+
+    // 绑定表单提交事件
+    if (reviewSettingsForm) {
+        reviewSettingsForm.addEventListener('submit', handleReviewSettingsSubmit);
+    }
+
+    // 绑定提醒频率变化事件
+    if (reminderFrequency && customDaysContainer) {
+        reminderFrequency.addEventListener('change', function() {
+            if (this.value === 'custom') {
+                customDaysContainer.classList.remove('hidden');
+            } else {
+                customDaysContainer.classList.add('hidden');
+            }
+        });
+    }
+
+    // 绑定复习间隔策略变化事件
+    if (reminderIntervalStrategy && customIntervalsContainer) {
+        reminderIntervalStrategy.addEventListener('change', function() {
+            if (this.value === 'custom') {
+                customIntervalsContainer.classList.remove('hidden');
+            } else {
+                customIntervalsContainer.classList.add('hidden');
+            }
+        });
+    }
+
+    // 绑定请求通知权限按钮事件
+    if (requestNotificationPermission) {
+        requestNotificationPermission.addEventListener('click', function() {
+            requestBrowserNotificationPermission().then(permission => {
+                updatePermissionStatusText(permission);
+            });
+        });
+    }
+
+    // 点击模态框背景关闭
+    if (reviewSettingsModal) {
+        reviewSettingsModal.addEventListener('click', (e) => {
+            if (e.target === reviewSettingsModal) {
+                hideReviewSettingsModal();
+            }
+        });
+    }
+
+    // 如果已经保存了复习设置，加载它们
+    loadReviewSettings();
+}
+
+// 显示复习设置模态框
+function showReviewSettingsModal() {
+    const reviewSettingsModal = document.getElementById('review-settings-modal');
+    if (reviewSettingsModal) {
+        reviewSettingsModal.classList.remove('hidden');
+    }
+}
+
+// 隐藏复习设置模态框
+function hideReviewSettingsModal() {
+    const reviewSettingsModal = document.getElementById('review-settings-modal');
+    if (reviewSettingsModal) {
+        reviewSettingsModal.classList.add('hidden');
+    }
+}
+
+// 处理复习设置表单提交
+function handleReviewSettingsSubmit(e) {
+    e.preventDefault();
+
+    // 获取表单数据
+    const enableNotifications = document.getElementById('enable-notifications').checked;
+    const notificationTime = document.getElementById('notification-time').value;
+    const reminderFrequency = document.getElementById('reminder-frequency').value;
+    const reminderIntervalStrategy = document.getElementById('reminder-interval-strategy').value;
+    const enableSound = document.getElementById('enable-sound').checked;
+    const notificationTitle = document.getElementById('notification-title').value;
+    const notificationMessage = document.getElementById('notification-message').value;
+
+    // 获取自定义提醒日
+    let reminderDays = [];
+    if (reminderFrequency === 'custom') {
+        const checkboxes = document.querySelectorAll('input[name="reminder-days"]:checked');
+        reminderDays = Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    // 获取自定义间隔
+    let customIntervals = [];
+    if (reminderIntervalStrategy === 'custom') {
+        const inputs = document.querySelectorAll('#custom-intervals-container input[type="number"]');
+        customIntervals = Array.from(inputs).map(input => parseInt(input.value));
+    }
+
+    // 构建设置对象
+    const settings = {
+        enableNotifications,
+        notificationTime,
+        reminderFrequency,
+        reminderDays,
+        reminderIntervalStrategy,
+        customIntervals,
+        enableSound,
+        notificationTitle,
+        notificationMessage,
+        lastUpdated: new Date().toISOString()
+    };
+
+    // 保存设置
+    saveReviewSettings(settings);
+
+    // 如果有复习提醒系统，更新它
+    if (window.ReviewReminder) {
+        ReviewReminder.updateSettings(settings);
+    }
+
+    // 显示成功提示
+    showSuccess('复习设置已保存');
+
+    // 关闭模态框
+    hideReviewSettingsModal();
+}
+
+// 保存复习设置
+function saveReviewSettings(settings) {
+    try {
+        localStorage.setItem('reviewReminderSettings', JSON.stringify(settings));
+    } catch (error) {
+        console.error('保存复习设置失败:', error);
+        showError('保存复习设置失败');
+    }
+}
+
+// 加载复习设置
+function loadReviewSettings() {
+    try {
+        const settingsJson = localStorage.getItem('reviewReminderSettings');
+        if (settingsJson) {
+            const settings = JSON.parse(settingsJson);
+            
+            // 设置表单值
+            const enableNotifications = document.getElementById('enable-notifications');
+            const notificationTime = document.getElementById('notification-time');
+            const reminderFrequency = document.getElementById('reminder-frequency');
+            const reminderIntervalStrategy = document.getElementById('reminder-interval-strategy');
+            const enableSound = document.getElementById('enable-sound');
+            const notificationTitle = document.getElementById('notification-title');
+            const notificationMessage = document.getElementById('notification-message');
+            const customDaysContainer = document.getElementById('custom-days-container');
+            const customIntervalsContainer = document.getElementById('custom-intervals-container');
+
+            if (enableNotifications) enableNotifications.checked = settings.enableNotifications;
+            if (notificationTime) notificationTime.value = settings.notificationTime || '20:00';
+            if (reminderFrequency) reminderFrequency.value = settings.reminderFrequency || 'daily';
+            if (reminderIntervalStrategy) reminderIntervalStrategy.value = settings.reminderIntervalStrategy || 'standard';
+            if (enableSound) enableSound.checked = settings.enableSound;
+            if (notificationTitle) notificationTitle.value = settings.notificationTitle || '该复习错题啦！';
+            if (notificationMessage) notificationMessage.value = settings.notificationMessage || '你有错题需要复习，点击查看详情。';
+
+            // 处理自定义提醒日
+            if (settings.reminderDays && settings.reminderDays.length > 0) {
+                const checkboxes = document.querySelectorAll('input[name="reminder-days"]');
+                checkboxes.forEach(cb => {
+                    cb.checked = settings.reminderDays.includes(cb.value);
+                });
+            }
+
+            // 处理自定义间隔
+            if (settings.customIntervals && settings.customIntervals.length > 0) {
+                const inputs = document.querySelectorAll('#custom-intervals-container input[type="number"]');
+                settings.customIntervals.forEach((interval, index) => {
+                    if (inputs[index]) {
+                        inputs[index].value = interval;
+                    }
+                });
+            }
+
+            // 显示/隐藏自定义容器
+            if (reminderFrequency && customDaysContainer) {
+                if (settings.reminderFrequency === 'custom') {
+                    customDaysContainer.classList.remove('hidden');
+                }
+            }
+
+            if (reminderIntervalStrategy && customIntervalsContainer) {
+                if (settings.reminderIntervalStrategy === 'custom') {
+                    customIntervalsContainer.classList.remove('hidden');
+                }
+            }
+        }
+    } catch (error) {
+        console.error('加载复习设置失败:', error);
+    }
+}
+
+// 检查浏览器通知权限
+function checkNotificationPermission() {
+    if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+            updatePermissionStatusText(permission);
+        });
+    }
+}
+
+// 请求浏览器通知权限
+function requestBrowserNotificationPermission() {
+    return new Promise((resolve, reject) => {
+        if (!('Notification' in window)) {
+            reject('浏览器不支持通知');
+            return;
+        }
+
+        Notification.requestPermission().then(permission => {
+            resolve(permission);
+        }).catch(error => {
+            reject(error);
+        });
+    });
+}
+
+// 更新权限状态文本
+function updatePermissionStatusText(permission) {
+    const permissionStatusText = document.getElementById('permission-status-text');
+    if (permissionStatusText) {
+        switch (permission) {
+            case 'granted':
+                permissionStatusText.textContent = '已授予';
+                permissionStatusText.className = 'text-xs text-green-500';
+                break;
+            case 'denied':
+                permissionStatusText.textContent = '已拒绝';
+                permissionStatusText.className = 'text-xs text-red-500';
+                break;
+            case 'default':
+                permissionStatusText.textContent = '未确定';
+                permissionStatusText.className = 'text-xs text-yellow-500';
+                break;
+        }
+    }
 }
 
 // 当DOM加载完成后初始化应用
