@@ -476,20 +476,31 @@
     <div id="game-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
         <div class="bg-white rounded-lg p-6 w-full max-w-md">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold">幸运翻牌游戏</h3>
+                <h3 class="text-xl font-bold">游戏中心</h3>
                 <button id="close-game-modal" class="text-gray-500 hover:text-gray-700">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
             </div>
-            <div id="game-content" class="py-4">
-                <p id="game-message" class="text-center mb-4">游戏进行中...</p>
-                <div id="game-board" class="grid grid-cols-3 gap-2 mb-4">
-                    <!-- 游戏格子将由JS动态生成 -->
+            <div id="game-selection" class="py-4">
+                <p id="game-message" class="text-center mb-6">请选择一个游戏开始</p>
+                <div class="grid grid-cols-1 gap-4 mb-4">
+                    <button id="select-jungle-run" class="bg-blue-50 hover:bg-blue-100 p-4 rounded-lg border border-blue-200 flex items-center justify-between transition-colors">
+                        <span class="font-medium">丛林奔跑</span>
+                        <i class="fa fa-gamepad text-blue-500"></i>
+                    </button>
+                    <button id="select-flying-cat" class="bg-purple-50 hover:bg-purple-100 p-4 rounded-lg border border-purple-200 flex items-center justify-between transition-colors">
+                        <span class="font-medium">飞翔的小猫</span>
+                        <i class="fa fa-gamepad text-purple-500"></i>
+                    </button>
+                    <button id="select-snake" class="bg-green-50 hover:bg-green-100 p-4 rounded-lg border border-green-200 flex items-center justify-between transition-colors">
+                        <span class="font-medium">贪吃蛇</span>
+                        <i class="fa fa-gamepad text-green-500"></i>
+                    </button>
                 </div>
                 <div class="text-center text-sm text-gray-500">
-                    <p>点击格子找出奖励！</p>
+                    <p>游戏将在5分钟后自动关闭</p>
                 </div>
             </div>
         </div>

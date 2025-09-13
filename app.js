@@ -1408,166 +1408,64 @@ function handlePlayGame() {
     updatePointsDisplay();
     
     // 显示游戏开始提示
-    showSuccess('已扣除50积分，游戏开始！');
+    showSuccess('已扣除50积分，请选择一个游戏开始！');
     
     // 打开游戏模态框
     const gameModal = document.getElementById('game-modal');
     gameModal.classList.remove('hidden');
     
-    // 初始化游戏
-    initGame();
+    // 初始化游戏选择界面的事件监听
+    initGameSelection();
 }
 
-// 初始化游戏
-function initGame() {
-    gameActive = true;
-    gameCards = [];
-    const gameBoard = document.getElementById('game-board');
-    const gameMessage = document.getElementById('game-message');
-    gameBoard.innerHTML = '';
-    gameMessage.textContent = '点击卡片找出奖励！';
+// 初始化游戏选择界面
+function initGameSelection() {
+    const selectJungleRun = document.getElementById('select-jungle-run');
+    const selectFlyingCat = document.getElementById('select-flying-cat');
+    const selectSnake = document.getElementById('select-snake');
     
-    // 创建9张卡片
-    for (let i = 0; i < 9; i++) {
-        const card = document.createElement('div');
-        card.className = 'bg-blue-100 hover:bg-blue-200 h-20 flex items-center justify-center cursor-pointer rounded transition-all';
-        card.dataset.index = i;
-        
-        // 卡片背面内容
-        const backContent = document.createElement('div');
-        backContent.className = 'text-blue-500 font-bold';
-        backContent.textContent = '?';
-        card.appendChild(backContent);
-        
-        // 添加点击事件
-        card.addEventListener('click', () => handleCardClick(card, i));
-        
-        gameBoard.appendChild(card);
-        gameCards.push(card);
-    }
+    // 移除之前可能存在的事件监听，避免重复绑定
+    const newSelectJungleRun = selectJungleRun.cloneNode(true);
+    selectJungleRun.parentNode.replaceChild(newSelectJungleRun, selectJungleRun);
     
-    // 随机设置奖励卡片位置
-    const rewardPosition = Math.floor(Math.random() * 9);
-    let punishmentPosition = Math.floor(Math.random() * 9);
+    const newSelectFlyingCat = selectFlyingCat.cloneNode(true);
+    selectFlyingCat.parentNode.replaceChild(newSelectFlyingCat, selectFlyingCat);
     
-    // 确保奖励和惩罚位置不同
-    while (punishmentPosition === rewardPosition) {
-        punishmentPosition = Math.floor(Math.random() * 9);
-    }
+    const newSelectSnake = selectSnake.cloneNode(true);
+    selectSnake.parentNode.replaceChild(newSelectSnake, selectSnake);
     
-    // 存储游戏状态
-    gameBoard.dataset.rewardPosition = rewardPosition;
-    gameBoard.dataset.punishmentPosition = punishmentPosition;
+    // 添加新的事件监听
+    newSelectJungleRun.addEventListener('click', () => openGame('丛林奔跑.html'));
+    newSelectFlyingCat.addEventListener('click', () => openGame('飞翔的小猫.html'));
+    newSelectSnake.addEventListener('click', () => openGame('贪吃蛇.html'));
 }
 
-// 处理卡片点击
-function handleCardClick(card, index) {
-    if (!gameActive || card.classList.contains('flipped')) {
-        return;
-    }
+// 打开游戏
+function openGame(gameUrl) {
+    // 关闭游戏选择模态框
+    closeGame();
     
-    // 标记卡片为已翻转
-    card.classList.add('flipped');
+    // 在新窗口打开游戏
+    const gameWindow = window.open(gameUrl, '_blank', 'width=800,height=600');
     
-    const gameBoard = document.getElementById('game-board');
-    const rewardPosition = parseInt(gameBoard.dataset.rewardPosition);
-    const punishmentPosition = parseInt(gameBoard.dataset.punishmentPosition);
-    
-    // 清空卡片内容
-    card.innerHTML = '';
-    
-    // 判断点击的卡片类型
-    if (index === rewardPosition) {
-        // 奖励卡片
-        card.className = 'bg-green-200 h-20 flex items-center justify-center rounded transition-all';
-        const rewardContent = document.createElement('div');
-        rewardContent.className = 'text-center';
-        rewardContent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-600 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg><p class="text-green-600 text-sm">恭喜!</p>';
-        card.appendChild(rewardContent);
-        
-        // 延迟显示结果
-        setTimeout(() => {
-            finishGame(true);
-        }, 1000);
-    } else if (index === punishmentPosition) {
-        // 惩罚卡片
-        card.className = 'bg-red-200 h-20 flex items-center justify-center rounded transition-all';
-        const punishmentContent = document.createElement('div');
-        punishmentContent.className = 'text-center';
-        punishmentContent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-600 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg><p class="text-red-600 text-sm">再接再厉</p>';
-        card.appendChild(punishmentContent);
-        
-        // 延迟显示结果
-        setTimeout(() => {
-            finishGame(false);
-        }, 1000);
-    } else {
-        // 普通卡片
-        card.className = 'bg-gray-200 h-20 flex items-center justify-center rounded transition-all';
-        const normalContent = document.createElement('div');
-        normalContent.className = 'text-gray-500';
-        normalContent.textContent = '继续';
-        card.appendChild(normalContent);
-    }
-}
-
-// 游戏结束处理
-function finishGame(isWinner) {
-    gameActive = false;
-    
-    const gameBoard = document.getElementById('game-board');
-    const gameMessage = document.getElementById('game-message');
-    
-    // 显示所有卡片
-    const rewardPosition = parseInt(gameBoard.dataset.rewardPosition);
-    const punishmentPosition = parseInt(gameBoard.dataset.punishmentPosition);
-    
-    gameCards.forEach((card, index) => {
-        if (!card.classList.contains('flipped')) {
-            card.classList.add('flipped');
-            card.innerHTML = '';
-            
-            if (index === rewardPosition) {
-                card.className = 'bg-green-200 h-20 flex items-center justify-center rounded transition-all';
-                const rewardContent = document.createElement('div');
-                rewardContent.className = 'text-center';
-                rewardContent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-600 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg><p class="text-green-600 text-sm">奖励!</p>';
-                card.appendChild(rewardContent);
-            } else if (index === punishmentPosition) {
-                card.className = 'bg-red-200 h-20 flex items-center justify-center rounded transition-all';
-                const punishmentContent = document.createElement('div');
-                punishmentContent.className = 'text-center';
-                punishmentContent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-600 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg><p class="text-red-600 text-sm">惩罚</p>';
-                card.appendChild(punishmentContent);
-            } else {
-                card.className = 'bg-gray-200 h-20 flex items-center justify-center rounded transition-all';
-                const normalContent = document.createElement('div');
-                normalContent.className = 'text-gray-500';
-                normalContent.textContent = '-';
-                card.appendChild(normalContent);
-            }
+    // 设置5分钟（300000毫秒）后自动关闭游戏窗口
+    const autoCloseTimer = setTimeout(() => {
+        if (gameWindow && !gameWindow.closed) {
+            gameWindow.close();
+            showSuccess('游戏已自动关闭（5分钟时间限制）');
         }
-    });
+    }, 300000);
     
-    // 根据游戏结果显示消息并发放奖励
-    if (isWinner) {
-        gameMessage.textContent = '恭喜你赢了！';
-        // 游戏获胜，奖励额外积分（20-50积分）
-        const rewardPoints = Math.floor(Math.random() * 30) + 20;
-        addPoints(rewardPoints, '小游戏获胜');
-        showSuccess(`游戏获胜！获得${rewardPoints}积分奖励！`);
-    } else {
-        gameMessage.textContent = '游戏结束，再接再厉！';
-        showError('游戏失败，再接再厉！');
-    }
+    // 检查游戏窗口是否被手动关闭，如果是则清除自动关闭计时器
+    const checkWindowClosed = setInterval(() => {
+        if (gameWindow && gameWindow.closed) {
+            clearTimeout(autoCloseTimer);
+            clearInterval(checkWindowClosed);
+        }
+    }, 1000);
     
-    // 更新显示
-    updatePointsDisplay();
-    
-    // 3秒后自动关闭游戏模态框
-    setTimeout(() => {
-        closeGame();
-    }, 3000);
+    // 显示游戏开始提示
+    showSuccess('游戏已在新窗口打开，将在5分钟后自动关闭');
 }
 
 // 关闭游戏模态框
