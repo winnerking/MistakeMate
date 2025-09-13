@@ -47,11 +47,6 @@ const addCategoryBtn = document.getElementById('add-category-btn');
 const userPointsElement = document.getElementById('user-points');
 const playGameBtn = document.getElementById('play-game-btn');
 
-// 绑定事件（为了兼容原有代码）
-function bindEvents() {
-    // 原有代码中可能调用了这个函数，所以保留但实现为空
-}
-
 // 加载本地存储的数据
 function loadData() {
     const savedQuestions = localStorage.getItem('questions');
@@ -132,9 +127,20 @@ function bindEvents() {
     }
     
     // 查看错题详情相关事件
-    closeDetailModal.addEventListener('click', () => {
-        questionDetailModal.classList.add('hidden');
-    });
+    if(closeDetailModal) {
+        closeDetailModal.addEventListener('click', () => {
+            questionDetailModal.classList.add('hidden');
+        });
+    }
+    
+    // 点击模态框背景关闭
+    if(questionDetailModal) {
+        questionDetailModal.addEventListener('click', (e) => {
+            if (e.target === questionDetailModal) {
+                questionDetailModal.classList.add('hidden');
+            }
+        });
+    }
     
     // 图片预览
     questionImage.addEventListener('change', handleQuestionImagePreview);
@@ -1514,12 +1520,7 @@ function init() {
     initCategoryDetailsModal();
     
     // 绑定事件
-    document.getElementById('add-category-btn')?.addEventListener('click', handleAddCategory);
-    document.getElementById('play-game-btn')?.addEventListener('click', handlePlayGame);
-    document.getElementById('close-game-modal')?.addEventListener('click', closeGame);
-    document.getElementById('filter-category')?.addEventListener('change', handleCategoryChange);
-    document.getElementById('sort-questions')?.addEventListener('change', renderQuestions);
-    document.getElementById('search-questions')?.addEventListener('input', renderQuestions);
+    bindEvents();
     
     // 渲染页面
     renderQuestions();
