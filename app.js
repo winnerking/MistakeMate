@@ -1123,8 +1123,8 @@ function reviewQuestion(questionId) {
         // 记录复习开始时间（用于计算复习时长）
         const reviewStartTime = new Date();
         
-        // 显示复习判定对话框
-        showReviewJudgementDialog(question, reviewStartTime);
+        // 显示带计时器的复习做题界面
+        showReviewQuestionInterface(question, reviewStartTime);
         
     } catch (error) {
         console.error('复习功能出错:', error);
@@ -1132,32 +1132,55 @@ function reviewQuestion(questionId) {
     }
 }
 
-// 显示复习判定对话框
-function showReviewJudgementDialog(question, reviewStartTime) {
-    // 创建复习判定对话框
+// 显示带计时器的复习做题界面
+function showReviewQuestionInterface(question, reviewStartTime) {
+    // 创建复习做题界面
     const dialog = document.createElement('div');
     dialog.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    dialog.setAttribute('id', 'review-question-dialog');
     
-    // 计算复习时长（秒）
-    const reviewDuration = Math.round((new Date() - reviewStartTime) / 1000);
+    // 格式化答案为HTML，保持换行等格式
+    const formattedAnswer = question.answerNotes ? question.answerNotes.replace(/\n/g, '<br>') : '暂无答案';
     
     dialog.innerHTML = `
-        <div class="bg-white rounded-xl shadow-lg p-6 max-w-md w-full">
-            <h3 class="text-xl font-semibold text-gray-800 mb-4">复习判定</h3>
-            <p class="text-gray-600 mb-2">你已经复习了 <span class="font-medium">${question.name}</span></p>
-            <p class="text-gray-500 text-sm mb-6">复习时长: ${formatDuration(reviewDuration)}</p>
-            
-            <div class="mb-6">
-                <h4 class="text-base font-medium text-gray-700 mb-2">你是否正确解答了这道题？</h4>
-                <div class="flex space-x-4">
-                    <button id="review-correct" class="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-custom">
-                        <i class="fa fa-check mr-1"></i> 正确
-                    </button>
-                    <button id="review-incorrect" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-custom">
-                        <i class="fa fa-times mr-1"></i> 错误
-                    </button>
-                </div>
+        <div class="bg-white rounded-xl shadow-lg p-6 max-w-lg w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold text-gray-800">复习题目</h3>
+                <div id="review-timer" class="text-lg font-medium text-primary">00:00:00</div>
             </div>
+            
+            <!-- 题目内容 -->
+            <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                <h4 class="text-base font-medium text-gray-700 mb-2">${question.name}</h4>
+                <p class="text-gray-600 whitespace-pre-line">${question.notes || '暂无题目内容'}</p>
+            </div>
+            
+            <!-- 隐藏的答案区域 -->
+            <div id="answer-section" class="hidden mb-6 bg-green-50 p-4 rounded-lg">
+                <h4 class="text-base font-medium text-green-700 mb-2">参考答案</h4>
+                <p class="text-gray-700" id="formatted-answer">${formattedAnswer}</p>
+            </div>
+            
+            <!-- 初始状态：显示完成做题按钮 -->
+            <div id="initial-controls" class="flex justify-end">
+                <button id="finish-question-btn" class="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-custom">
+                    完成做题
+                </button>
+            </div>
+            
+            <!-- 完成做题后显示：答案和判断选项（初始隐藏） -->
+            <div id="review-controls" class="hidden">
+                <div class="mb-6">
+                    <h4 class="text-base font-medium text-gray-700 mb-2">你是否正确解答了这道题？</h4>
+                    <div class="flex space-x-4">
+                        <button id="review-correct" class="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-custom">
+                            <i class="fa fa-check mr-1"></i> 正确
+                        </button>
+                        <button id="review-incorrect" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-custom">
+                            <i class="fa fa-times mr-1"></i> 错误
+                        </button>
+                    </div>
+                </div>
             
             ${question.answerImage ? `
             <div class="mb-4 bg-gray-50 p-3 rounded-lg">
@@ -1170,9 +1193,36 @@ function showReviewJudgementDialog(question, reviewStartTime) {
     
     document.body.appendChild(dialog);
     
+    // 计时器逻辑
+    let reviewDuration = 0;
+    const timerElement = dialog.querySelector('#review-timer');
+    const timerInterval = setInterval(() => {
+        reviewDuration += 1;
+        const hours = Math.floor(reviewDuration / 3600);
+        const minutes = Math.floor((reviewDuration % 3600) / 60);
+        const seconds = reviewDuration % 60;
+        timerElement.textContent = 
+            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }, 1000);
+    
+    // 绑定完成做题按钮事件
+    const finishQuestionBtn = dialog.querySelector('#finish-question-btn');
+    finishQuestionBtn.addEventListener('click', function() {
+        // 显示答案区域
+        const answerSection = dialog.querySelector('#answer-section');
+        answerSection.classList.remove('hidden');
+        
+        // 隐藏初始控制区域，显示复习控制区域
+        const initialControls = dialog.querySelector('#initial-controls');
+        const reviewControls = dialog.querySelector('#review-controls');
+        initialControls.classList.add('hidden');
+        reviewControls.classList.remove('hidden');
+    });
+    
     // 绑定正确按钮事件
     const correctBtn = dialog.querySelector('#review-correct');
     correctBtn.addEventListener('click', function() {
+        clearInterval(timerInterval);
         completeReview(question, true, reviewDuration);
         dialog.remove();
     });
@@ -1180,6 +1230,7 @@ function showReviewJudgementDialog(question, reviewStartTime) {
     // 绑定错误按钮事件
     const incorrectBtn = dialog.querySelector('#review-incorrect');
     incorrectBtn.addEventListener('click', function() {
+        clearInterval(timerInterval);
         completeReview(question, false, reviewDuration);
         dialog.remove();
     });
@@ -1187,6 +1238,7 @@ function showReviewJudgementDialog(question, reviewStartTime) {
     // 点击背景关闭对话框
     dialog.addEventListener('click', function(e) {
         if (e.target === dialog) {
+            clearInterval(timerInterval);
             dialog.remove();
         }
     });

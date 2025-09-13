@@ -39,21 +39,20 @@
             }
             
             // 创建错题对象
-            questions.push({
-                id: `question-${Date.now()}-${i}`,
-                name: `模拟错题 ${i + 1}`,
-                category: categories[Math.floor(Math.random() * categories.length)],
-                image: null,
-                note: `这是第${i + 1}道模拟错题的笔记内容。`,
-                reviewedAt: reviewedAt,
-                reviewCount: reviewCount,
-                status: status,
-                addedAt: new Date(Date.now() - Math.floor(Math.random() * 604800000)).toISOString(), // 随机添加时间（一周内）
-                answer: {
-                    image: null,
-                    content: `这是第${i + 1}道模拟错题的答案解析。`
-                }
-            });
+                questions.push({
+                    id: `question-${Date.now()}-${i}`,
+                    name: `模拟错题 ${i + 1}`,
+                    category: categories[Math.floor(Math.random() * categories.length)],
+                    notes: `这是第${i + 1}道模拟错题的笔记内容。`,
+                    questionImage: null,
+                    answerImage: null,
+                    answerNotes: `这是第${i + 1}道模拟错题的答案解析。`,
+                    createdAt: new Date(Date.now() - Math.floor(Math.random() * 604800000)).toISOString(), // 随机添加时间（一周内）
+                    reviewedAt: reviewedAt,
+                    status: status,
+                    reviewCount: reviewCount,
+                    masteryLevel: 0
+                });
         }
         
         return questions;
