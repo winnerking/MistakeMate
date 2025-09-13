@@ -1152,13 +1152,17 @@ function showReviewQuestionInterface(question, reviewStartTime) {
             <!-- 题目内容 -->
             <div class="mb-6 bg-gray-50 p-4 rounded-lg">
                 <h4 class="text-base font-medium text-gray-700 mb-2">${question.name}</h4>
+                <img src="${question.questionImage}" alt="${question.name}" class="w-full h-auto rounded-md mb-4">
                 <p class="text-gray-600 whitespace-pre-line">${question.notes || '暂无题目内容'}</p>
             </div>
             
             <!-- 隐藏的答案区域 -->
-            <div id="answer-section" class="hidden mb-6 bg-green-50 p-4 rounded-lg">
-                <h4 class="text-base font-medium text-green-700 mb-2">参考答案</h4>
-                <p class="text-gray-700" id="formatted-answer">${formattedAnswer}</p>
+            <div id="answer-section" class="hidden mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <h4 class="text-base font-medium text-gray-700 mb-2">参考答案</h4>
+                ${question.answerImage ? `
+                <img src="${question.answerImage}" alt="${question.name} 的答案" class="w-full h-auto rounded-md mb-4">
+                ` : ''}
+                ${formattedAnswer !== '暂无答案' ? `<p class="text-gray-700" id="formatted-answer">${formattedAnswer}</p>` : ''}
             </div>
             
             <!-- 初始状态：显示完成做题按钮 -->
@@ -1181,13 +1185,6 @@ function showReviewQuestionInterface(question, reviewStartTime) {
                         </button>
                     </div>
                 </div>
-            
-            ${question.answerImage ? `
-            <div class="mb-4 bg-gray-50 p-3 rounded-lg">
-                <p class="text-sm text-gray-500 mb-2">答案提示：</p>
-                <img src="${question.answerImage}" alt="答案" class="w-full h-auto rounded-md max-h-40 object-contain">
-            </div>
-            ` : ''}
         </div>
     `;
     
