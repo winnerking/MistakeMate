@@ -5,6 +5,11 @@ let categories = ['数学', '英语', '物理', '化学'];
 let currentSort = 'newest';
 let currentCategory = 'all';
 let currentSearch = '';
+let userPoints = 0; // 用户积分
+let pointHistory = []; // 积分历史记录
+let gameActive = false; // 游戏是否活跃
+let gameCards = []; // 游戏卡片数组
+let currentViewCategory = null; // 当前查看的分类
 
 // DOM 元素
 const mobileMenuButton = document.getElementById('mobile-menu-button');
@@ -39,23 +44,12 @@ const masteredQuestions = document.getElementById('mastered-questions');
 const reviewQuestions = document.getElementById('review-questions');
 const navbar = document.getElementById('navbar');
 const addCategoryBtn = document.getElementById('add-category-btn');
+const userPointsElement = document.getElementById('user-points');
+const playGameBtn = document.getElementById('play-game-btn');
 
-// 初始化
-function init() {
-    // 加载本地存储的数据
-    loadData();
-    
-    // 初始化图表
-    initCharts();
-    
-    // 绑定事件
-    bindEvents();
-    
-    // 渲染错题列表
-    renderQuestions();
-    
-    // 更新统计数据
-    updateStats();
+// 绑定事件（为了兼容原有代码）
+function bindEvents() {
+    // 原有代码中可能调用了这个函数，所以保留但实现为空
 }
 
 // 加载本地存储的数据
@@ -69,12 +63,33 @@ function loadData() {
     if (savedCategories) {
         categories = JSON.parse(savedCategories);
     }
+    
+    // 确保"未分类"组始终存在
+    if (!categories.includes('未分类')) {
+        categories.unshift('未分类');
+    }
+    
+    const savedPoints = localStorage.getItem('userPoints');
+    if (savedPoints) {
+        userPoints = JSON.parse(savedPoints);
+    }
+    
+    const savedPointHistory = localStorage.getItem('pointHistory');
+    if (savedPointHistory) {
+        pointHistory = JSON.parse(savedPointHistory);
+    }
 }
 
 // 保存数据到本地存储
 function saveData() {
     localStorage.setItem('questions', JSON.stringify(questions));
     localStorage.setItem('categories', JSON.stringify(categories));
+}
+
+// 保存积分数据
+function savePoints() {
+    localStorage.setItem('userPoints', JSON.stringify(userPoints));
+    localStorage.setItem('pointHistory', JSON.stringify(pointHistory));
 }
 
 // 绑定事件
@@ -111,6 +126,11 @@ function bindEvents() {
     
     uploadAnswerForm.addEventListener('submit', handleUploadAnswer);
     
+    // AI分类按钮事件
+    if(document.getElementById('auto-category-btn')) {
+        document.getElementById('auto-category-btn').addEventListener('click', handleAutoCategory);
+    }
+    
     // 查看错题详情相关事件
     closeDetailModal.addEventListener('click', () => {
         questionDetailModal.classList.add('hidden');
@@ -130,6 +150,18 @@ function bindEvents() {
     
     // 添加分类
     addCategoryBtn.addEventListener('click', handleAddCategory);
+    
+    // 积分相关事件
+    if(playGameBtn) {
+        playGameBtn.addEventListener('click', handlePlayGame);
+    }
+    
+    // 游戏相关事件
+    const gameModal = document.getElementById('game-modal');
+    const closeGameModal = document.getElementById('close-game-modal');
+    if(closeGameModal) {
+        closeGameModal.addEventListener('click', closeGame);
+    }
 }
 
 // 处理滚动事件
@@ -174,6 +206,96 @@ function handleAnswerImagePreview(e) {
         };
         reader.readAsDataURL(file);
     }
+}
+
+// AI自动分类处理函数
+function handleAutoCategory() {
+    const questionName = document.getElementById('question-name').value.trim();
+    const questionNote = document.getElementById('question-note').value.trim();
+    const statusElement = document.getElementById('auto-category-status');
+    const categorySelect = document.getElementById('question-category');
+    const aiButton = document.getElementById('auto-category-btn');
+    
+    // 验证输入
+    if (!questionName && !questionNote) {
+        showError('请至少输入错题名称或错题笔记，以便AI进行分类');
+        return;
+    }
+    
+    // 显示加载状态
+    if(statusElement) statusElement.classList.remove('hidden');
+    if(aiButton) aiButton.disabled = true;
+    
+    // 构建请求数据
+    const prompt = `根据以下信息确定这道题的学科分类，选项是：数学、英语、物理、化学。请只返回类别名称，不要包含其他解释。\n\n${questionName}\n${questionNote}`;
+    
+    // 调用DeepSeek AI API
+    fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer sk-d23e1fb667c147b7a47b02cc8e391129'
+        },
+        body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+                { role: 'system', content: '你是一个智能分类助手，可以根据题目内容判断学科类别。' },
+                { role: 'user', content: prompt }
+            ],
+            max_tokens: 10
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`API调用失败: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        // 处理AI返回的分类结果
+        if (data.choices && data.choices.length > 0) {
+            const categoryText = data.choices[0].message.content.trim();
+            
+            // 映射AI返回的文本到选项值
+            const categoryMap = {
+                '数学': 'math',
+                '英语': 'english',
+                '物理': 'physics',
+                '化学': 'chemistry'
+            };
+            
+            let categoryValue = categoryMap[categoryText];
+            
+            // 容错处理
+            if (!categoryValue) {
+                // 如果返回的内容不匹配预定义的类别，尝试根据关键词进行匹配
+                const lowerText = categoryText.toLowerCase();
+                if (lowerText.includes('数')) categoryValue = 'math';
+                else if (lowerText.includes('英')) categoryValue = 'english';
+                else if (lowerText.includes('物')) categoryValue = 'physics';
+                else if (lowerText.includes('化')) categoryValue = 'chemistry';
+            }
+            
+            // 更新分类选择
+            if (categoryValue && categorySelect && categorySelect.querySelector(`option[value="${categoryValue}"]`)) {
+                categorySelect.value = categoryValue;
+                showSuccess(`AI已成功将题目分类为${categoryText}`);
+            } else {
+                showError('AI分类结果不明确，请手动选择分类');
+            }
+        } else {
+            showError('未能获取AI分类结果');
+        }
+    })
+    .catch(error => {
+        console.error('AI分类错误:', error);
+        showError(`AI分类失败: ${error.message || '未知错误'}`);
+    })
+    .finally(() => {
+        // 隐藏加载状态，恢复按钮
+        if(statusElement) statusElement.classList.add('hidden');
+        if(aiButton) aiButton.disabled = false;
+    });
 }
 
 // 处理上传错题
@@ -318,7 +440,250 @@ function handleAddCategory() {
         categories.push(categoryName.trim());
         saveData();
         showSuccess('分类添加成功');
-        // TODO: 更新分类选择器和分类列表
+        renderCategories(); // 更新分类列表
+        updateCategoryFilter(); // 更新分类筛选器
+        updateCharts(); // 更新图表
+    }
+}
+
+// 处理删除分类
+function handleDeleteCategory(categoryName) {
+    // 不允许删除"未分类"组
+    if (categoryName === '未分类') {
+        showError('不允许删除"未分类"组');
+        return;
+    }
+    
+    if (confirm(`确定要删除"${categoryName}"分类吗？该分类下的所有错题将被移至"未分类"组。`)) {
+        // 将该分类下的所有错题移至"未分类"组
+        questions.forEach(question => {
+            if (question.category === categoryName) {
+                question.category = '未分类';
+            }
+        });
+        
+        // 从分类列表中删除该分类
+        const index = categories.indexOf(categoryName);
+        if (index > -1) {
+            categories.splice(index, 1);
+        }
+        
+        saveData();
+        showSuccess('分类删除成功');
+        renderCategories(); // 更新分类列表
+        updateCategoryFilter(); // 更新分类筛选器
+        updateCharts(); // 更新图表
+        renderQuestions(); // 更新错题列表
+    }
+}
+
+// 处理重命名分类
+function handleRenameCategory(oldName) {
+    // 不允许重命名"未分类"组
+    if (oldName === '未分类') {
+        showError('不允许重命名"未分类"组');
+        return;
+    }
+    
+    const newName = prompt('请输入新的分类名称：', oldName);
+    if (newName && newName.trim() && newName !== oldName) {
+        if (categories.includes(newName.trim())) {
+            showError('分类名称已存在');
+            return;
+        }
+        
+        // 重命名分类下的所有错题
+        questions.forEach(question => {
+            if (question.category === oldName) {
+                question.category = newName.trim();
+            }
+        });
+        
+        // 更新分类列表中的名称
+        const index = categories.indexOf(oldName);
+        if (index > -1) {
+            categories[index] = newName.trim();
+        }
+        
+        saveData();
+        showSuccess('分类重命名成功');
+        renderCategories(); // 更新分类列表
+        updateCategoryFilter(); // 更新分类筛选器
+        updateCharts(); // 更新图表
+        renderQuestions(); // 更新错题列表
+    }
+}
+
+// 处理查看分类详情
+function handleViewCategoryDetails(categoryName) {
+    currentViewCategory = categoryName;
+    showCategoryDetailsModal();
+}
+
+// 渲染分类列表
+function renderCategories() {
+    const categoriesContainer = document.querySelector('#categories-container');
+    if (!categoriesContainer) return;
+    
+    // 清空容器
+    categoriesContainer.innerHTML = '';
+    
+    // 渲染每个分类
+    categories.forEach(category => {
+        const categoryCard = document.createElement('div');
+        
+        // 获取分类对应的颜色
+        const borderColor = getCategoryBorderColor(category);
+        
+        // 计算分类内错题数量
+        const questionCount = questions.filter(q => q.category === category).length;
+        
+        // 计算复习进度（已掌握和已复习的题目占比）
+        const reviewedCount = questions.filter(q => q.category === category && (q.status === 'reviewed' || q.status === 'mastered')).length;
+        const progressPercentage = questionCount > 0 ? Math.round((reviewedCount / questionCount) * 100) : 0;
+        
+        categoryCard.className = `bg-white rounded-xl shadow-md p-6 border-l-4 ${borderColor} transform hover:-translate-y-1 transition-custom cursor-pointer`;
+        
+        categoryCard.innerHTML = `
+            <div class="flex justify-between items-start mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">${category}</h3>
+                <div class="flex space-x-2">
+                    <button class="rename-category-btn text-gray-400 hover:text-gray-600 transition-custom" data-category="${category}">
+                        <i class="fa fa-pencil"></i>
+                    </button>
+                    <button class="delete-category-btn text-gray-400 hover:text-red-500 transition-custom" data-category="${category}">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <p class="text-gray-500 text-sm mb-4">包含 <span class="font-medium text-gray-700">${questionCount}</span> 道错题</p>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="${getCategoryProgressColor(category)} h-2 rounded-full" style="width: ${progressPercentage}%"></div>
+            </div>
+        `;
+        
+        // 添加点击事件 - 查看分类详情
+        categoryCard.addEventListener('click', (e) => {
+            // 如果点击的是操作按钮，不触发查看详情
+            if (e.target.closest('.rename-category-btn') || e.target.closest('.delete-category-btn') || 
+                e.target.closest('.fa-pencil') || e.target.closest('.fa-trash')) {
+                return;
+            }
+            handleViewCategoryDetails(category);
+        });
+        
+        categoriesContainer.appendChild(categoryCard);
+    });
+    
+    // 绑定重命名和删除按钮事件
+    document.querySelectorAll('.rename-category-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // 阻止冒泡
+            const category = e.currentTarget.getAttribute('data-category');
+            handleRenameCategory(category);
+        });
+    });
+    
+    document.querySelectorAll('.delete-category-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // 阻止冒泡
+            const category = e.currentTarget.getAttribute('data-category');
+            handleDeleteCategory(category);
+        });
+    });
+}
+
+// 获取分类对应的边框颜色
+function getCategoryBorderColor(category) {
+    const colorMap = {
+        '未分类': 'border-gray-300',
+        '数学': 'border-primary',
+        '英语': 'border-blue-500',
+        '物理': 'border-green-500',
+        '化学': 'border-purple-500'
+    };
+    
+    // 如果是自定义分类，返回一个随机颜色
+    if (!colorMap[category]) {
+        const colors = ['border-indigo-500', 'border-pink-500', 'border-orange-500', 'border-yellow-500'];
+        // 根据分类名称生成一个一致的随机数
+        const seed = category.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const index = seed % colors.length;
+        return colors[index];
+    }
+    
+    return colorMap[category];
+}
+
+// 获取分类对应的进度条颜色
+function getCategoryProgressColor(category) {
+    const colorMap = {
+        '未分类': 'bg-gray-400',
+        '数学': 'bg-primary',
+        '英语': 'bg-blue-500',
+        '物理': 'bg-green-500',
+        '化学': 'bg-purple-500'
+    };
+    
+    // 如果是自定义分类，返回一个随机颜色
+    if (!colorMap[category]) {
+        const colors = ['bg-indigo-500', 'bg-pink-500', 'bg-orange-500', 'bg-yellow-500'];
+        // 根据分类名称生成一个一致的随机数
+        const seed = category.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const index = seed % colors.length;
+        return colors[index];
+    }
+    
+    return colorMap[category];
+}
+
+// 获取分类对应的文本颜色
+function getCategoryColor(category) {
+    const colorMap = {
+        '未分类': 'text-gray-600',
+        '数学': 'text-primary',
+        '英语': 'text-blue-600',
+        '物理': 'text-green-600',
+        '化学': 'text-purple-600'
+    };
+    
+    // 如果是自定义分类，返回一个随机颜色
+    if (!colorMap[category]) {
+        const colors = ['text-indigo-600', 'text-pink-600', 'text-orange-600', 'text-yellow-600'];
+        // 根据分类名称生成一个一致的随机数
+        const seed = category.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const index = seed % colors.length;
+        return colors[index];
+    }
+    
+    return colorMap[category];
+}
+
+// 更新分类筛选器
+function updateCategoryFilter() {
+    const filterCategory = document.getElementById('filter-category');
+    if (!filterCategory) return;
+    
+    // 保存当前选中的分类
+    const currentValue = filterCategory.value;
+    
+    // 清空并重新添加选项
+    filterCategory.innerHTML = '<option value="all">全部分类</option>';
+    
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        filterCategory.appendChild(option);
+    });
+    
+    // 恢复之前的选择，如果存在的话
+    if (categories.includes(currentValue)) {
+        filterCategory.value = currentValue;
+    } else if (currentValue !== 'all') {
+        filterCategory.value = 'all';
+        currentCategory = 'all';
+        renderQuestions();
     }
 }
 
@@ -543,6 +908,9 @@ function reviewQuestion(questionId) {
     question.reviewCount += 1;
     question.reviewedAt = new Date().toISOString();
     
+    // 增加基础复习积分 (每复习一次获得10积分)
+    addPoints(10, '复习错题');
+    
     // 根据复习次数更新掌握程度
     if (question.reviewCount === 1) {
         question.masteryLevel = 30;
@@ -550,24 +918,37 @@ function reviewQuestion(questionId) {
     } else if (question.reviewCount >= 3) {
         question.masteryLevel = 100;
         question.status = 'mastered';
-        // 给予奖励
-        giveReward('复习达人');
+        // 给予额外奖励
+        addPoints(20, '掌握知识点');
     } else {
         question.masteryLevel = 60;
         question.status = 'reviewed';
     }
     
     saveData();
-    showSuccess('复习完成！');
+    showSuccess('复习完成！获得10积分！');
     renderQuestions();
     updateStats();
     updateCharts();
+    updatePointsDisplay();
 }
 
-// 给予奖励
-function giveReward(rewardName) {
-    // 这里可以实现奖励机制，如显示成就弹窗、更新成就徽章等
-    showSuccess(`恭喜获得奖励：${rewardName}`);
+
+
+// 添加积分
+function addPoints(points, reason) {
+    userPoints += points;
+    
+    // 记录积分历史
+    pointHistory.push({
+        points: points,
+        reason: reason,
+        type: 'gain',
+        timestamp: new Date().toISOString()
+    });
+    
+    // 保存积分数据
+    savePoints();
 }
 
 // 更新统计数据
@@ -582,6 +963,210 @@ function updateStats() {
     // 待复习的错题数
     const reviewCount = questions.filter(q => q.status === 'pending' || q.status === 'reviewed').length;
     reviewQuestions.textContent = reviewCount;
+    
+    // 更新积分显示
+    updatePointsDisplay();
+}
+
+// 更新积分显示
+function updatePointsDisplay() {
+    if(userPointsElement) {
+        userPointsElement.textContent = userPoints;
+    }
+}
+
+// 参与小游戏
+function handlePlayGame() {
+    if (userPoints < 50) {
+        showError('积分不足，需要50积分才能参与小游戏');
+        return;
+    }
+    
+    // 扣除积分
+    userPoints -= 50;
+    
+    // 记录积分历史
+    pointHistory.push({
+        points: 50,
+        reason: '参与小游戏',
+        type: 'spend',
+        timestamp: new Date().toISOString()
+    });
+    
+    // 保存积分数据
+    savePoints();
+    
+    // 更新显示
+    updatePointsDisplay();
+    
+    // 显示游戏开始提示
+    showSuccess('已扣除50积分，游戏开始！');
+    
+    // 打开游戏模态框
+    const gameModal = document.getElementById('game-modal');
+    gameModal.classList.remove('hidden');
+    
+    // 初始化游戏
+    initGame();
+}
+
+// 初始化游戏
+function initGame() {
+    gameActive = true;
+    gameCards = [];
+    const gameBoard = document.getElementById('game-board');
+    const gameMessage = document.getElementById('game-message');
+    gameBoard.innerHTML = '';
+    gameMessage.textContent = '点击卡片找出奖励！';
+    
+    // 创建9张卡片
+    for (let i = 0; i < 9; i++) {
+        const card = document.createElement('div');
+        card.className = 'bg-blue-100 hover:bg-blue-200 h-20 flex items-center justify-center cursor-pointer rounded transition-all';
+        card.dataset.index = i;
+        
+        // 卡片背面内容
+        const backContent = document.createElement('div');
+        backContent.className = 'text-blue-500 font-bold';
+        backContent.textContent = '?';
+        card.appendChild(backContent);
+        
+        // 添加点击事件
+        card.addEventListener('click', () => handleCardClick(card, i));
+        
+        gameBoard.appendChild(card);
+        gameCards.push(card);
+    }
+    
+    // 随机设置奖励卡片位置
+    const rewardPosition = Math.floor(Math.random() * 9);
+    let punishmentPosition = Math.floor(Math.random() * 9);
+    
+    // 确保奖励和惩罚位置不同
+    while (punishmentPosition === rewardPosition) {
+        punishmentPosition = Math.floor(Math.random() * 9);
+    }
+    
+    // 存储游戏状态
+    gameBoard.dataset.rewardPosition = rewardPosition;
+    gameBoard.dataset.punishmentPosition = punishmentPosition;
+}
+
+// 处理卡片点击
+function handleCardClick(card, index) {
+    if (!gameActive || card.classList.contains('flipped')) {
+        return;
+    }
+    
+    // 标记卡片为已翻转
+    card.classList.add('flipped');
+    
+    const gameBoard = document.getElementById('game-board');
+    const rewardPosition = parseInt(gameBoard.dataset.rewardPosition);
+    const punishmentPosition = parseInt(gameBoard.dataset.punishmentPosition);
+    
+    // 清空卡片内容
+    card.innerHTML = '';
+    
+    // 判断点击的卡片类型
+    if (index === rewardPosition) {
+        // 奖励卡片
+        card.className = 'bg-green-200 h-20 flex items-center justify-center rounded transition-all';
+        const rewardContent = document.createElement('div');
+        rewardContent.className = 'text-center';
+        rewardContent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-600 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg><p class="text-green-600 text-sm">恭喜!</p>';
+        card.appendChild(rewardContent);
+        
+        // 延迟显示结果
+        setTimeout(() => {
+            finishGame(true);
+        }, 1000);
+    } else if (index === punishmentPosition) {
+        // 惩罚卡片
+        card.className = 'bg-red-200 h-20 flex items-center justify-center rounded transition-all';
+        const punishmentContent = document.createElement('div');
+        punishmentContent.className = 'text-center';
+        punishmentContent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-600 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg><p class="text-red-600 text-sm">再接再厉</p>';
+        card.appendChild(punishmentContent);
+        
+        // 延迟显示结果
+        setTimeout(() => {
+            finishGame(false);
+        }, 1000);
+    } else {
+        // 普通卡片
+        card.className = 'bg-gray-200 h-20 flex items-center justify-center rounded transition-all';
+        const normalContent = document.createElement('div');
+        normalContent.className = 'text-gray-500';
+        normalContent.textContent = '继续';
+        card.appendChild(normalContent);
+    }
+}
+
+// 游戏结束处理
+function finishGame(isWinner) {
+    gameActive = false;
+    
+    const gameBoard = document.getElementById('game-board');
+    const gameMessage = document.getElementById('game-message');
+    
+    // 显示所有卡片
+    const rewardPosition = parseInt(gameBoard.dataset.rewardPosition);
+    const punishmentPosition = parseInt(gameBoard.dataset.punishmentPosition);
+    
+    gameCards.forEach((card, index) => {
+        if (!card.classList.contains('flipped')) {
+            card.classList.add('flipped');
+            card.innerHTML = '';
+            
+            if (index === rewardPosition) {
+                card.className = 'bg-green-200 h-20 flex items-center justify-center rounded transition-all';
+                const rewardContent = document.createElement('div');
+                rewardContent.className = 'text-center';
+                rewardContent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-600 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg><p class="text-green-600 text-sm">奖励!</p>';
+                card.appendChild(rewardContent);
+            } else if (index === punishmentPosition) {
+                card.className = 'bg-red-200 h-20 flex items-center justify-center rounded transition-all';
+                const punishmentContent = document.createElement('div');
+                punishmentContent.className = 'text-center';
+                punishmentContent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-600 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg><p class="text-red-600 text-sm">惩罚</p>';
+                card.appendChild(punishmentContent);
+            } else {
+                card.className = 'bg-gray-200 h-20 flex items-center justify-center rounded transition-all';
+                const normalContent = document.createElement('div');
+                normalContent.className = 'text-gray-500';
+                normalContent.textContent = '-';
+                card.appendChild(normalContent);
+            }
+        }
+    });
+    
+    // 根据游戏结果显示消息并发放奖励
+    if (isWinner) {
+        gameMessage.textContent = '恭喜你赢了！';
+        // 游戏获胜，奖励额外积分（20-50积分）
+        const rewardPoints = Math.floor(Math.random() * 30) + 20;
+        addPoints(rewardPoints, '小游戏获胜');
+        showSuccess(`游戏获胜！获得${rewardPoints}积分奖励！`);
+    } else {
+        gameMessage.textContent = '游戏结束，再接再厉！';
+        showError('游戏失败，再接再厉！');
+    }
+    
+    // 更新显示
+    updatePointsDisplay();
+    
+    // 3秒后自动关闭游戏模态框
+    setTimeout(() => {
+        closeGame();
+    }, 3000);
+}
+
+// 关闭游戏模态框
+function closeGame() {
+    const gameModal = document.getElementById('game-modal');
+    gameModal.classList.add('hidden');
+    gameActive = false;
 }
 
 // 初始化图表
@@ -756,6 +1341,191 @@ function showError(message) {
         errorToast.classList.remove('translate-y-0', 'opacity-100');
         errorToast.classList.add('translate-y-20', 'opacity-0');
     }, 3000);
+}
+
+// 显示分类详情模态框
+function showCategoryDetailsModal() {
+    if (!currentViewCategory) return;
+    
+    const modal = document.getElementById('category-details-modal');
+    const modalTitle = document.getElementById('category-details-title');
+    const totalQuestionsCount = document.getElementById('total-questions-count');
+    const masteredQuestionsCount = document.getElementById('mastered-questions-count');
+    const reviewProgressPercentage = document.getElementById('review-progress-percentage');
+    const questionsList = document.getElementById('category-questions-list');
+    
+    // 设置模态框标题
+    modalTitle.textContent = `${currentViewCategory} 详情`;
+    
+    // 获取分类下的所有错题
+    const categoryQuestions = questions.filter(q => q.category === currentViewCategory);
+    const masteredCount = categoryQuestions.filter(q => q.status === 'mastered').length;
+    const reviewedCount = categoryQuestions.filter(q => q.status === 'reviewed' || q.status === 'mastered').length;
+    const progressPercentage = categoryQuestions.length > 0 ? Math.round((reviewedCount / categoryQuestions.length) * 100) : 0;
+    
+    // 更新统计信息
+    totalQuestionsCount.textContent = categoryQuestions.length;
+    masteredQuestionsCount.textContent = masteredCount;
+    reviewProgressPercentage.textContent = `${progressPercentage}%`;
+    
+    // 渲染错题列表
+    if (categoryQuestions.length === 0) {
+        questionsList.innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+                <p>暂无错题</p>
+            </div>
+        `;
+    } else {
+        // 按状态和复习次数排序：未复习的在前，然后是复习中的，最后是已掌握的
+        const sortedQuestions = [...categoryQuestions].sort((a, b) => {
+            const statusOrder = { 'pending': 0, 'reviewed': 1, 'mastered': 2 };
+            if (statusOrder[a.status] !== statusOrder[b.status]) {
+                return statusOrder[a.status] - statusOrder[b.status];
+            }
+            // 同状态按复习次数排序
+            return (a.reviewCount || 0) - (b.reviewCount || 0);
+        });
+        
+        questionsList.innerHTML = '';
+        sortedQuestions.forEach(question => {
+            // 获取分类对应的颜色
+            const categoryColor = getCategoryColor(question.category);
+            
+            // 根据状态获取对应的样式和文本
+            let statusClass = '';
+            let statusText = '';
+            
+            switch(question.status) {
+                case 'pending':
+                    statusClass = 'bg-yellow-100 text-yellow-800';
+                    statusText = '未复习';
+                    break;
+                case 'reviewed':
+                    statusClass = 'bg-blue-100 text-blue-800';
+                    statusText = '复习中';
+                    break;
+                case 'mastered':
+                    statusClass = 'bg-green-100 text-green-800';
+                    statusText = '已掌握';
+                    break;
+            }
+            
+            const questionItem = document.createElement('div');
+            questionItem.className = 'border border-gray-200 rounded-lg p-4 hover:shadow-md transition-custom cursor-pointer';
+            questionItem.dataset.questionId = question.id;
+            
+            questionItem.innerHTML = `
+                <div class="flex flex-wrap items-center gap-2 text-sm mb-3">
+                    <span class="${categoryColor} bg-opacity-10 px-2 py-1 rounded-full font-medium">${question.category}</span>
+                    <span class="${statusClass} px-2 py-1 rounded-full font-medium">${statusText}</span>
+                    <span><i class="fa fa-calendar mr-1"></i> ${formatDate(question.createdAt)}</span>
+                </div>
+                <h5 class="font-medium text-gray-800 mb-2">${question.name}</h5>
+                <div class="flex justify-between items-center text-sm text-gray-500">
+                    <span>复习 ${question.reviewCount || 0} 次</span>
+                    <span class="text-primary">查看详情 →</span>
+                </div>
+            `;
+            
+            // 添加点击事件
+            questionItem.addEventListener('click', () => {
+                viewQuestionDetail(question.id);
+            });
+            
+            questionsList.appendChild(questionItem);
+        });
+    }
+    
+    // 显示模态框
+    modal.classList.remove('hidden');
+}
+
+// 关闭分类详情模态框
+function closeCategoryDetailsModal() {
+    const modal = document.getElementById('category-details-modal');
+    modal.classList.add('hidden');
+    currentViewCategory = null;
+}
+
+// 开始复习分类
+function studyCategory() {
+    if (!currentViewCategory) return;
+    
+    // 筛选出该分类下未掌握的错题
+    const categoryQuestions = questions.filter(q => q.category === currentViewCategory && q.status !== 'mastered');
+    
+    if (categoryQuestions.length === 0) {
+        showSuccess('该分类下的所有错题都已掌握！');
+        closeCategoryDetailsModal();
+        return;
+    }
+    
+    // 关闭详情模态框
+    closeCategoryDetailsModal();
+    
+    // 筛选显示该分类的错题
+    currentCategory = currentViewCategory;
+    renderQuestions();
+    
+    // 滚动到错题列表
+    const questionsSection = document.getElementById('questions');
+    if (questionsSection) {
+        questionsSection.scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    showSuccess(`开始复习 ${currentViewCategory} 分类，共有 ${categoryQuestions.length} 道题需要复习`);
+}
+
+// 初始化分类详情模态框事件
+function initCategoryDetailsModal() {
+    const modal = document.getElementById('category-details-modal');
+    const closeBtn = document.getElementById('close-category-details-modal');
+    const studyBtn = document.getElementById('study-category-btn');
+    
+    // 关闭按钮事件
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeCategoryDetailsModal);
+    }
+    
+    // 学习按钮事件
+    if (studyBtn) {
+        studyBtn.addEventListener('click', studyCategory);
+    }
+    
+    // 点击模态框背景关闭
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeCategoryDetailsModal();
+            }
+        });
+    }
+}
+
+// 初始化应用
+function init() {
+    // 加载数据
+    loadData();
+    
+    // 初始化图表
+    initCharts();
+    
+    // 初始化分类详情模态框
+    initCategoryDetailsModal();
+    
+    // 绑定事件
+    document.getElementById('add-category-btn')?.addEventListener('click', handleAddCategory);
+    document.getElementById('play-game-btn')?.addEventListener('click', handlePlayGame);
+    document.getElementById('close-game-modal')?.addEventListener('click', closeGame);
+    document.getElementById('filter-category')?.addEventListener('change', handleCategoryChange);
+    document.getElementById('sort-questions')?.addEventListener('change', renderQuestions);
+    document.getElementById('search-questions')?.addEventListener('input', renderQuestions);
+    
+    // 渲染页面
+    renderQuestions();
+    updateStats();
+    renderCategories(); // 渲染分类列表
+    updateCategoryFilter(); // 更新分类筛选器
 }
 
 // 当DOM加载完成后初始化应用
